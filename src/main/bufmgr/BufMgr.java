@@ -4,6 +4,8 @@ import main.global.GlobalConst;
 import main.global.Page;
 import main.global.PageId;
 
+import java.util.HashMap;
+
 /**
  * <h3>Minibase Buffer Manager</h3>
  * The buffer manager manages an array of main memory pages.  The array is
@@ -21,17 +23,21 @@ import main.global.PageId;
  */
 public class BufMgr implements GlobalConst {
 
-  protected Page[] bufferPool;
+  private Frame[] bufferPool;
+  private HashMap<PageId, Integer> bookKeeping;
+  private int pages;
+  private int maxNoOfFrames;
+
   /**
    * Constructs a buffer manager by initializing member data.  
-   * 
+   * bookKeeping keeps a map of pageId -> FrameIndex
+   *
    * @param numframes number of frames in the buffer pool
    */
   public BufMgr(int numframes) {
-
-    /* Initializing the Buffer Pool to the number of frames */
-    bufferPool = new Page[numframes];
-
+    bufferPool = new Frame[numframes];
+    bookKeeping = new HashMap<>();
+    pages = 0; maxNoOfFrames = numframes;
   } // public BufMgr(int numframes)
 
   /**
