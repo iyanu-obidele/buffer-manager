@@ -13,7 +13,7 @@ public class Frame {
         this(false, 0, null);
     }
 
-    /** constructor for the frame adt */
+    /** constructor for the frame */
     public Frame(boolean dirtyBit, int count, Page somePage){
         dirty = dirtyBit;
         pinCount = count;
@@ -21,22 +21,22 @@ public class Frame {
     }
 
     /** returns the current pinCount of the page */
-    public int getPinCount(){
+    public synchronized int getPinCount(){
         return this.pinCount;
     }
 
-    /** returns the current dirty bit state of the frame*/
-    public boolean getDirtyBit(){
+    /** returns the current dirty bit state of the page in the frame*/
+    public synchronized boolean getDirtyBit(){
         return this.dirty;
     }
 
     /** returns the current page stored in this frame*/
-    public Page getPage(){
+    public synchronized Page getPage(){
         return this.page;
     }
 
     /** sets page on a Frame.*/
-    public void setPage(Page newPage){
+    public synchronized void setPage(Page newPage){
         if (this.page != null || this.pinCount > 0){
             throw new IllegalStateException(
                     "You're trying to overwrite a page that might be in use");
@@ -45,24 +45,24 @@ public class Frame {
     }
 
     /** increase number of usage for this page*/
-    public void incrementPinCount(){
+    public synchronized void incrementPinCount(){
         this.pinCount++;
     }
 
     /** decrement pinCount, it's a no op if pinCount is already zero*/
-    public void decrementPinCount(){
+    public synchronized void decrementPinCount(){
         if (this.pinCount > 0){
             this.pinCount--;
         }
     }
 
     /** set the page in the frame to dirty */
-    public void setDirty(){
+    public synchronized void setDirty(){
         this.dirty = true;
     }
 
     /** once a page is detached from the frame, it's safe to wipe it all clean */
-    public void unsetPage(){
+    public synchronized void unsetPage(){
        this.dirty = false;
        this.pinCount = 0;
        this.page = null;

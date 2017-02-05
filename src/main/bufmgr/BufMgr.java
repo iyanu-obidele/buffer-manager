@@ -1,10 +1,12 @@
 package main.bufmgr;
 
+import main.diskmgr.DiskMgr;
 import main.global.GlobalConst;
 import main.global.Page;
 import main.global.PageId;
 
 import java.util.HashMap;
+import java.util.Stack;
 
 /**
  * <h3>Minibase Buffer Manager</h3>
@@ -23,135 +25,251 @@ import java.util.HashMap;
  */
 public class BufMgr implements GlobalConst {
 
-  private Frame[] bufferPool;
-  private HashMap<PageId, Integer> bookKeeping;
-  private int pages;
-  private int maxNoOfFrames;
+    /* Data structures to keep state of buffer pool */
+    private Frame[] bufferPool;
+    private HashMap<PageId, Integer> bookKeeping;
+    private Stack<Integer> freeIndexes = new Stack<>();
 
-  /**
-   * Constructs a buffer manager by initializing member data.  
-   * bookKeeping keeps a map of pageId -> FrameIndex
-   *
-   * @param numframes number of frames in the buffer pool
-   */
-  public BufMgr(int numframes) {
-    bufferPool = new Frame[numframes];
-    bookKeeping = new HashMap<>();
-    pages = 0; maxNoOfFrames = numframes;
-  } // public BufMgr(int numframes)
+    /* Class variables/objects */
+    private int maxNoOfFrames;
+    private DiskMgr diskMgr = new DiskMgr();
 
-  /**
-   * The result of this call is that disk page number pageno should reside in
-   * a frame in the buffer pool and have an additional pin assigned to it, 
-   * and mempage should refer to the contents of that frame. <br><br>
-   * 
-   * If disk page pageno is already in the buffer pool, this simply increments 
-   * the pin count.  Otherwise, this<br> 
-   * <pre>
-   * 	uses the replacement policy to select a frame to replace
-   * 	writes the frame's contents to disk if valid and dirty
-   * 	if (contents == PIN_DISKIO)
-   * 		read disk page pageno into chosen frame
-   * 	else (contents == PIN_MEMCPY)
-   * 		copy mempage into chosen frame
-   * 	[omitted from the above is maintenance of the frame table and hash map]
-   * </pre>		
-   * @param pageno identifies the page to pin
-   * @param mempage An output parameter referring to the chosen frame.  If
-   * contents==PIN_MEMCPY it is also an input parameter which is copied into
-   * the chosen frame, see the contents parameter. 
-   * @param contents Describes how the contents of the frame are determined.<br>  
-   * If PIN_DISKIO, read the page from disk into the frame.<br>  
-   * If PIN_MEMCPY, copy mempage into the frame.<br>  
-   * If PIN_NOOP, copy nothing into the frame - the frame contents are irrelevant.<br>
-   * Note: In the cases of PIN_MEMCPY and PIN_NOOP, disk I/O is avoided.
-   * @throws IllegalArgumentException if PIN_MEMCPY and the page is pinned.
-   * @throws IllegalStateException if all pages are pinned (i.e. pool is full)
-   */
-  public void pinPage(PageId pageno, Page mempage, int contents) {
+    /**
+     * Constructs a buffer manager by initializing member data.
+     * bookKeeping keeps a map of pageId -> FrameIndex
+     *
+     * @param numOfFrames number of frames in the buffer pool
+     */
+    public BufMgr(int numOfFrames) {
+        bufferPool = new Frame[numOfFrames];
+        bookKeeping = new HashMap<>();
+        maxNoOfFrames = numOfFrames;
 
-	throw new UnsupportedOperationException("Not implemented");
+        /* populate the stack with available index*/
+        for (int i = 0; i < maxNoOfFrames; i++){
+            freeIndexes.push(i);
+        }
+    } // public BufMgr(int numOfFrames)
 
-  } // public void pinPage(PageId pageno, Page page, int contents)
-  
-  /**
-   * Unpins a disk page from the buffer pool, decreasing its pin count.
-   * 
-   * @param pageno identifies the page to unpin
-   * @param dirty UNPIN_DIRTY if the page was modified, UNPIN_CLEAN otherwise
-   * @throws IllegalArgumentException if the page is not in the buffer pool
-   *  or not pinned
-   */
-  public void unpinPage(PageId pageno, boolean dirty) {
+    /**
+     * The result of this call is that disk page number pageno should reside in
+     * a frame in the buffer pool and have an additional pin assigned to it,
+     * and mempage should refer to the contents of that frame. <br><br>
+     *
+     * If disk page pageno is already in the buffer pool, this simply increments
+     * the pin count.  Otherwise, this<br>
+     * <pre>
+     * 	uses the replacement policy to select a frame to replace
+     * 	writes the frame's contents to disk if valid and dirty
+     * 	if (contents == PIN_DISKIO)
+     * 		read disk page pageno into chosen frame
+     * 	else (contents == PIN_MEMCPY)
+     * 		copy mempage into chosen frame
+     * 	[omitted from the above is maintenance of the frame table and hash map]
+     * </pre>
+     * @param pageno identifies the page to pin
+     * @param mempage An output parameter referring to the chosen frame.  If
+     * contents==PIN_MEMCPY it is also an input parameter which is copied into
+     * the chosen frame, see the contents parameter.
+     * @param contents Describes how the contents of the frame are determined.<br>
+     * If PIN_DISKIO, read the page from disk into the frame.<br>
+     * If PIN_MEMCPY, copy mempage into the frame.<br>
+     * If PIN_NOOP, copy nothing into the frame - the frame contents are irrelevant.<br>
+     * Note: In the cases of PIN_MEMCPY and PIN_NOOP, disk I/O is avoided.
+     * @throws IllegalArgumentException if PIN_MEMCPY and the page is pinned.
+     * @throws IllegalStateException if all pages are pinned (i.e. pool is full)
+     */
+    public void pinPage(PageId pageno, Page mempage, int contents) {
+        /* case 0: PIN_NOOP -
+        copy nothing into the frame means what exactly ?
+        Return immediately from pinPage or allocate the frame but leave its content empty ?*/
+        if (contents == PIN_NOOP){
+            return;
+        }
 
-    throw new UnsupportedOperationException("Not implemented");
+        /* case 1: If page is already in buffer pool increase pinCount */
+        if (bookKeeping.containsKey(pageno)){
+            int frameIndex = bookKeeping.get(pageno);
+            Frame frame = bufferPool[frameIndex];
+            if (contents == PIN_MEMCPY && frame.getPinCount() > 0) {
+                throw new IllegalArgumentException("Page is already pinned and a copy was requested");
+            }
+            frame.incrementPinCount();
+        } else {
+            /* Pick frame to use using a replacement policy */
+            Frame frame = pickAndAssignPageToFrame(pageno, mempage, contents);
 
-  } // public void unpinPage(PageId pageno, boolean dirty)
-  
-  /**
-   * Allocates a run of new disk pages and pins the first one in the buffer pool.
-   * The pin will be made using PIN_MEMCPY.  Watch out for disk page leaks.
-   * 
-   * @param firstpg input and output: holds the contents of the first allocated page
-   * and refers to the frame where it resides
-   * @param run_size input: number of pages to allocate
-   * @return page id of the first allocated page
-   * @throws IllegalArgumentException if firstpg is already pinned
-   * @throws IllegalStateException if all pages are pinned (i.e. pool exceeded)
-   */
-  public PageId newPage(Page firstpg, int run_size) {
+            /* When all pages pinned */
+            if (frame == null){
+                throw new IllegalStateException("Bufferpool is full and we couldn't find any frames to replace");
+            }
 
-    throw new UnsupportedOperationException("Not implemented");
+            /* Get available index. Note, this wont throw an exception, as long as
+            * method "pickAndAssignPageToFrame" finds a frame to replace */
+            int frameIndex = freeIndexes.pop();
 
-  } // public PageId newPage(Page firstpg, int run_size)
+            /* Update books */
+            bufferPool[frameIndex] = frame;
+            bookKeeping.put(pageno, frameIndex);
+        }
 
-  /**
-   * Deallocates a single page from disk, freeing it from the pool if needed.
-   * 
-   * @param pageno identifies the page to remove
-   * @throws IllegalArgumentException if the page is pinned
-   */
-  public void freePage(PageId pageno) {
+    }// public void pinPage(PageId pageno, Page page, int contents)
 
-    throw new UnsupportedOperationException("Not implemented");
+    /**
+     * Uses a replacement policy to pick a frame that can be replaced in the buffer pool
+     * TODO: refactor this method
+     */
+    private Frame pickAndAssignPageToFrame(PageId pageno, Page mempage, int contents) {
+        Frame frame = new Frame();
+        /* case 2a: If page is not in bufferpool and bufferpool has free frames */
+        if (!freeIndexes.isEmpty()) {
+            switch (contents){
+                case PIN_DISKIO:
+                    diskMgr.read_page(pageno, mempage); // additional IO
+                    frame.setPage(mempage);
+                    break;
+                case PIN_MEMCPY: frame.setPage(mempage);
+                    break;
+                default: frame = null;  // this branch should never be taken
+                    break;
+            }
+        } else {
+            /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
+            frame = replacementPolicy();
+            if (frame != null) {
+                switch (contents) {
+                    case PIN_DISKIO:
+                        diskMgr.read_page(pageno, mempage);
+                        frame.setPage(mempage);
+                        break;
+                    case PIN_MEMCPY:
+                        frame.setPage(mempage);
+                        break;
+                    default:
+                        frame = null;
+                        break;
+                }
+            }
+        }
+        return frame;
+    } // private Frame pickVulnerableFrame(PageId pageno, Page mempage, int contents)
 
-  } // public void freePage(PageId firstid)
+    /* clock replacement policy */
+    private Frame replacementPolicy(){
+        throw new UnsupportedOperationException("not implemeted");
 
-  /**
-   * Write all valid and dirty frames to disk.
-   * Note flushing involves only writing, not unpinning or freeing
-   * or the like.
-   * 
-   */
-  public void flushAllFrames() {
+    } // private replacementPolicy()
 
-    throw new UnsupportedOperationException("Not implemented");
+    /**
+     * Unpins a disk page from the buffer pool, decreasing its pin count.
+     *
+     * @param pageno identifies the page to unpin
+     * @param dirty UNPIN_DIRTY if the page was modified, UNPIN_CLEAN otherwise
+     * @throws IllegalArgumentException if the page is not in the buffer pool
+     *  or not pinned
+     */
+    public void unpinPage(PageId pageno, boolean dirty) {
+        if (!bookKeeping.containsKey(pageno)) {
+            throw new IllegalArgumentException("Attempt to unpin a page not in the buffer pool");
+        }
+        Frame frame = bufferPool[bookKeeping.get(pageno)];
+        if (frame.getPinCount() == 0){
+            throw new IllegalArgumentException("Cannot unpin a page that isn't pinned");
+        }
+        frame.decrementPinCount();
+        /* Should we check for the pincount value before writing ? */
+        if (dirty){
+            flushPage(pageno);
+        }
+    } // public void unpinPage(PageId pageno, boolean dirty)
 
-  } // public void flushAllFrames()
+    /**
+     * Allocates a run of new disk pages and pins the first one in the buffer pool.
+     * The pin will be made using PIN_MEMCPY.  Watch out for disk page leaks.
+     *
+     * @param firstpg input and output: holds the contents of the first allocated page
+     * and refers to the frame where it resides
+     * @param run_size input: number of pages to allocate
+     * @return page id of the first allocated page
+     * @throws IllegalArgumentException if firstpg is already pinned
+     * @throws IllegalStateException if all pages are pinned (i.e. pool exceeded)
+     */
+    public PageId newPage(Page firstpg, int run_size) {
+        Frame frame = replacementPolicy();
+        if (frame == null){
+            throw new IllegalStateException("Pool exceeded");
+        }
+        PageId pageId = diskMgr.allocate_page(run_size);
+        try {
+            pinPage(pageId, firstpg, PIN_MEMCPY);
+        } catch (Exception ex){
+            throw ex;
+        }
+        return pageId;
+    } // public PageId newPage(Page firstpg, int run_size)
 
-  /**
-   * Write a page in the buffer pool to disk, if dirty.
-   * 
-   * @throws IllegalArgumentException if the page is not in the buffer pool
-   */
-  public void flushPage(PageId pageno) {
-	  
-	throw new UnsupportedOperationException("Not implemented");
-    
-  }
+    /**
+     * Deallocates a single page from disk, freeing it from the pool if needed.
+     *
+     * @param pageno identifies the page to remove
+     * @throws IllegalArgumentException if the page is pinned
+     */
+    public void freePage(PageId pageno) {
+        if (bookKeeping.containsKey(pageno)){
+            Frame frame = bufferPool[bookKeeping.get(pageno)];
+            if (frame.getPinCount() > 0){
+                throw new IllegalArgumentException("Attempt to deallocate a page in use");
+            }
+            frame.unsetPage();
 
-   /**
-   * Gets the total number of buffer frames.
-   */
-  public int getNumFrames() {
-    throw new UnsupportedOperationException("Not implemented");
-  }
+            /* Update books */
+            int frameIndex = bookKeeping.get(pageno);
+            freeIndexes.push(frameIndex);
+            bookKeeping.remove(pageno);
+        }
+        diskMgr.deallocate_page(pageno);
+    } // public void freePage(PageId firstid)
 
-  /**
-   * Gets the total number of unpinned buffer frames.
-   */
-  public int getNumUnpinned() {
-    throw new UnsupportedOperationException("Not implemented");
-  }
+    /**
+     * Write all valid and dirty frames to disk.
+     * Note flushing involves only writing, not unpinning or freeing
+     * or the like.
+     *
+     */
+    public void flushAllFrames() {
+        for (PageId key: bookKeeping.keySet()){
+            flushPage(key);
+        }
+    } // public void flushAllFrames()
+
+    /**
+     * Write a page in the buffer pool to disk, if dirty.
+     *
+     * @throws IllegalArgumentException if the page is not in the buffer pool
+     */
+    public void flushPage(PageId pageno) {
+        if (!bookKeeping.containsKey(pageno)) {
+            throw new IllegalArgumentException("Attempt to flush a page not in the bufferpool");
+        }
+
+        Frame frame = bufferPool[bookKeeping.get(pageno)];
+        if (frame.getDirtyBit()){
+            diskMgr.write_page(pageno, frame.getPage());
+        }
+    }
+
+    /**
+     * Gets the total number of buffer frames.
+     */
+    public int getNumFrames() {
+        return this.maxNoOfFrames;
+    }
+
+    /**
+     * Gets the total number of unpinned buffer frames.
+     */
+    public int getNumUnpinned() {
+        return this.freeIndexes.size();
+    }
 
 } // public class BufMgr implements GlobalConst
