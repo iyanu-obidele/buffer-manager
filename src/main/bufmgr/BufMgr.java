@@ -120,7 +120,7 @@ public class BufMgr implements GlobalConst {
      * TODO: refactor this method
      */
     private Frame pickAndAssignPageToFrame(PageId pageno, Page mempage, int contents) {
-        Frame frame = new Frame();
+        Frame frame = new Frame(pageno);
         /* case 2a: If page is not in bufferpool and bufferpool has free frames */
         if (!freeIndexes.isEmpty()) {
             switch (contents){
@@ -137,6 +137,10 @@ public class BufMgr implements GlobalConst {
             /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
             frame = replacementPolicy();
             if (frame != null) {
+                /* We also need to ensure it's written to disk if modified */
+                if (frame.getDirtyBit()){
+                    flushPage(frame.getPageId());
+                }
                 switch (contents) {
                     case PIN_DISKIO:
                         diskMgr.read_page(pageno, mempage);

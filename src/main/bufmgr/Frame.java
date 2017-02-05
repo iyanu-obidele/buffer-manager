@@ -1,23 +1,26 @@
 package main.bufmgr;
 
 import main.global.Page;
+import main.global.PageId;
 
 /* class representing the abstraction of a frame. */
 public class Frame {
     private boolean dirty;
     private int pinCount;
     private Page page;
+    private PageId pageId;
 
     /** new frame constructor */
-    public Frame(){
-        this(false, 0, null);
+    public Frame(PageId pageId){
+        this(false, 0, null, pageId);
     }
 
     /** constructor for the frame */
-    public Frame(boolean dirtyBit, int count, Page somePage){
+    public Frame(boolean dirtyBit, int count, Page somePage, PageId id){
         dirty = dirtyBit;
         pinCount = count;
         page = somePage;
+        pageId = id;
     }
 
     /** returns the current pinCount of the page */
@@ -28,6 +31,10 @@ public class Frame {
     /** returns the current dirty bit state of the page in the frame*/
     public synchronized boolean getDirtyBit(){
         return this.dirty;
+    }
+
+    public PageId getPageId(){
+        return this.pageId;
     }
 
     /** returns the current page stored in this frame*/
@@ -66,5 +73,6 @@ public class Frame {
        this.dirty = false;
        this.pinCount = 0;
        this.page = null;
+       this.pageId = null;
     }
 }
