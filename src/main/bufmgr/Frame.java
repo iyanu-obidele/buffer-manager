@@ -8,7 +8,6 @@ public class Frame {
     private boolean dirty;
     private int pinCount;
     private Page page;
-    private PageId pageId;
     private int referenced;
 
     /** new frame constructor */
@@ -22,15 +21,6 @@ public class Frame {
         pinCount = count;
         referenced = ref;
         page = somePage;
-        pageId = id;
-    }
-
-    public PageId getPageId(){
-        return this.pageId;
-    }
-
-    public void setPageId(PageId id){
-        this.pageId = id;
     }
 
     public void setReferenced(){
