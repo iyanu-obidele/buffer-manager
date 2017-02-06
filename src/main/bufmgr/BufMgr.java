@@ -6,7 +6,7 @@ import main.global.Page;
 import main.global.PageId;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashMap;
+import java.util.HashMap;
 import java.util.Stack;
 
 /**
@@ -28,13 +28,12 @@ public class BufMgr implements GlobalConst {
 
     /* Data structures to keep state of buffer pool */
     private Frame[] bufferPool;
-    private LinkedHashMap<PageId, Integer> bookKeeping;
+    private HashMap<PageId, Integer> bookKeeping;
     private Stack<Integer> freeIndexes = new Stack<>();
 
     /* Class variables/objects */
     private int maxNoOfFrames;
     private int current = 0;
-    private int pageId = 3;
 
     /**
      * Constructs a buffer manager by initializing member data.
@@ -44,7 +43,7 @@ public class BufMgr implements GlobalConst {
      */
     public BufMgr(int numOfFrames) {
         bufferPool = new Frame[numOfFrames];
-        bookKeeping = new LinkedHashMap<>();
+        bookKeeping = new HashMap<>();
         maxNoOfFrames = numOfFrames;
 
         /* populate the stack with available index*/
@@ -85,9 +84,6 @@ public class BufMgr implements GlobalConst {
         /* case 0: PIN_NOOP -
         copy nothing into the frame means what exactly ?
         Return immediately from pinPage or allocate the frame but leave its content empty ?*/
-        if (contents == PIN_NOOP){
-            return;
-        }
 
         /* case 1: If page is already in buffer pool increase pinCount */
         if (bookKeeping.containsKey(pageno)){
@@ -137,6 +133,8 @@ public class BufMgr implements GlobalConst {
                     frame.incrementPinCount();
                     frame.setReferenced();
                     break;
+                case PIN_NOOP:
+                    break;
                 default:
                     frame = null;  // this branch should never be taken
                     break;
@@ -162,6 +160,8 @@ public class BufMgr implements GlobalConst {
                         frame.setPage(mempage);
                         frame.incrementPinCount();
                         frame.setReferenced();
+                        break;
+                    case PIN_NOOP:
                         break;
                     default:
                         frame = null;   // this branch should never be taken
@@ -208,9 +208,6 @@ public class BufMgr implements GlobalConst {
             throw new IllegalArgumentException("Attempt to unpin a page not in the buffer pool");
         }
         Frame frame = bufferPool[bookKeeping.get(pageno)];
-        if (frame.getPinCount() == 0){
-            throw new IllegalArgumentException("Cannot unpin a page that isn't pinned");
-        }
         frame.decrementPinCount();
         /* Should we check for the pincount value before writing ? */
         if (dirty){
