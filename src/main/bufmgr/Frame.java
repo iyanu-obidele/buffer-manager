@@ -52,10 +52,7 @@ public class Frame {
 
     /** sets page on a Frame.*/
     public synchronized void setPage(Page newPage){
-        if (this.page != null || this.pinCount > 0){
-            throw new IllegalStateException(
-                    "You're trying to overwrite a page that might be in use");
-        }
+        //this.page.copyPage(newPage);
         this.page = newPage;
     }
 
@@ -93,7 +90,5 @@ public class Frame {
        this.dirty = false;
        this.pinCount = 0;
        this.referenced = 0;
-       this.page = null;
-       this.pageId = null;
     }
 }

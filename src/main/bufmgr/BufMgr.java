@@ -6,8 +6,7 @@ import main.global.Page;
 import main.global.PageId;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
-import java.util.Stack;
+import java.util.*;
 
 /**
  * <h3>Minibase Buffer Manager</h3>
@@ -134,6 +133,9 @@ public class BufMgr implements GlobalConst {
                     frame.setReferenced();
                     break;
                 case PIN_NOOP:
+                    frame.setPage(mempage);
+                    frame.incrementPinCount();
+                    frame.setReferenced();
                     break;
                 default:
                     frame = null;  // this branch should never be taken
@@ -141,12 +143,8 @@ public class BufMgr implements GlobalConst {
             }
         } else {
             /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
-            frame = replacementPolicy(0);
+            frame = replacementPolicy();
             if (frame != null) {
-                /* We also need to ensure it's written to disk if modified */
-                flushPage(frame);
-                frame.unsetPage();
-                freeIndexes.push(bookKeeping.get(frame.getPageId().pid));
                 switch (contents) {
                     case PIN_DISKIO:
                         Minibase.DiskManager.read_page(pageno, mempage);
@@ -162,6 +160,9 @@ public class BufMgr implements GlobalConst {
                         frame.setReferenced();
                         break;
                     case PIN_NOOP:
+                        frame.setPage(mempage);
+                        frame.incrementPinCount();
+                        frame.setReferenced();
                         break;
                     default:
                         frame = null;   // this branch should never be taken
@@ -179,20 +180,24 @@ public class BufMgr implements GlobalConst {
      * Otherwise we could have just picked any one of the free frames to use.
      * */
     @Nullable
-    private Frame replacementPolicy(int count){
-        if (count == 3){
-            return null;
-        }
-        Frame currFrame = bufferPool[current];
-        if (currFrame.getPinCount() == 0){
-            if (currFrame.getReferenced() == 1){
-                currFrame.unsetReferenced();
-                current = (current + 1) % maxNoOfFrames;
-            } else {
-                return currFrame;
+    private Frame replacementPolicy(){
+        int rotation = 0;
+        Frame currFrame = null;
+        while (currFrame == null && rotation < 3){
+            if (bufferPool[current].getPinCount() == 0) {
+                if (bufferPool[current].getReferenced() == 1) {
+                    bufferPool[current].unsetReferenced();
+                    current = (current + 1) % maxNoOfFrames;
+                    if (current == 0)
+                        rotation++;
+                } else {
+                    currFrame = bufferPool[current];
+                    currFrame.unsetPage();
+                    freeIndexes.push(current);
+                }
             }
         }
-        return replacementPolicy(count + 1);
+        return currFrame;
     } // private replacementPolicy(int current)
 
     /**
@@ -229,7 +234,7 @@ public class BufMgr implements GlobalConst {
      */
     public PageId newPage(Page firstpg, int run_size) {
         if (freeIndexes.isEmpty()) {
-            Frame frame = replacementPolicy(0);
+            Frame frame = replacementPolicy();
             if (frame == null) {
                 throw new IllegalStateException("Pool exceeded");
             }
@@ -283,7 +288,8 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalArgumentException if the page is not in the buffer pool
      */
     private void flushPage(Frame frame) {
-        if (frame.getPage() == null) {
+        Set<Frame> set = new HashSet<>(Arrays.asList(bufferPool));
+        if (!set.contains(frame)) {
             throw new IllegalArgumentException("Attempt to flush a page not in the bufferpool");
         }
 
