@@ -28,7 +28,7 @@ public class BufMgr implements GlobalConst {
 
     /* Data structures to keep state of buffer pool */
     private Frame[] bufferPool;
-    private HashMap<PageId, Integer> bookKeeping;
+    private HashMap<Integer, Integer> bookKeeping;
     private Stack<Integer> freeIndexes = new Stack<>();
 
     /* Class variables/objects */
@@ -86,8 +86,8 @@ public class BufMgr implements GlobalConst {
         Return immediately from pinPage or allocate the frame but leave its content empty ?*/
 
         /* case 1: If page is already in buffer pool increase pinCount */
-        if (bookKeeping.containsKey(pageno)){
-            int frameIndex = bookKeeping.get(pageno);
+        if (bookKeeping.containsKey(pageno.pid)){
+            int frameIndex = bookKeeping.get(pageno.pid);
             Frame frame = bufferPool[frameIndex];
             if (contents == PIN_MEMCPY && frame.getPinCount() > 0) {
                 throw new IllegalArgumentException("Page is already pinned and a copy was requested");
@@ -108,7 +108,7 @@ public class BufMgr implements GlobalConst {
 
             /* Update books */
             bufferPool[frameIndex] = frame;
-            bookKeeping.put(pageno, frameIndex);
+            bookKeeping.put(pageno.pid, frameIndex);
         }
 
     }// public void pinPage(PageId pageno, Page page, int contents)
@@ -141,12 +141,12 @@ public class BufMgr implements GlobalConst {
             }
         } else {
             /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
-            frame = replacementPolicy(current);
+            frame = replacementPolicy(0);
             if (frame != null) {
                 /* We also need to ensure it's written to disk if modified */
                 flushPage(frame);
                 frame.unsetPage();
-                freeIndexes.push(bookKeeping.get(frame.getPageId()));
+                freeIndexes.push(bookKeeping.get(frame.getPageId().pid));
                 switch (contents) {
                     case PIN_DISKIO:
                         Minibase.DiskManager.read_page(pageno, mempage);
@@ -204,10 +204,10 @@ public class BufMgr implements GlobalConst {
      *  or not pinned
      */
     public void unpinPage(PageId pageno, boolean dirty) {
-        if (!bookKeeping.containsKey(pageno)) {
+        if (!bookKeeping.containsKey(pageno.pid)) {
             throw new IllegalArgumentException("Attempt to unpin a page not in the buffer pool");
         }
-        Frame frame = bufferPool[bookKeeping.get(pageno)];
+        Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
         frame.decrementPinCount();
         /* Should we check for the pincount value before writing ? */
         if (dirty){
@@ -229,7 +229,7 @@ public class BufMgr implements GlobalConst {
      */
     public PageId newPage(Page firstpg, int run_size) {
         if (freeIndexes.isEmpty()) {
-            Frame frame = replacementPolicy(current);
+            Frame frame = replacementPolicy(0);
             if (frame == null) {
                 throw new IllegalStateException("Pool exceeded");
             }
@@ -250,17 +250,17 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalArgumentException if the page is pinned
      */
     public void freePage(PageId pageno) {
-        if (bookKeeping.containsKey(pageno)){
-            Frame frame = bufferPool[bookKeeping.get(pageno)];
+        if (bookKeeping.containsKey(pageno.pid)){
+            Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
             if (frame.getPinCount() > 0){
                 throw new IllegalArgumentException("Attempt to deallocate a page in use");
             }
             frame.unsetPage();
 
             /* Update books */
-            int frameIndex = bookKeeping.get(pageno);
+            int frameIndex = bookKeeping.get(pageno.pid);
             freeIndexes.push(frameIndex);
-            bookKeeping.remove(pageno);
+            bookKeeping.remove(pageno.pid);
         }
         Minibase.DiskManager.deallocate_page(pageno);
     } // public void freePage(PageId firstid)
