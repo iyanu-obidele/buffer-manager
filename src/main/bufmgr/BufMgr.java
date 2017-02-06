@@ -1,11 +1,12 @@
 package main.bufmgr;
 
-import main.diskmgr.DiskMgr;
 import main.global.GlobalConst;
+import main.global.Minibase;
 import main.global.Page;
 import main.global.PageId;
+import org.jetbrains.annotations.Nullable;
 
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Stack;
 
 /**
@@ -27,12 +28,13 @@ public class BufMgr implements GlobalConst {
 
     /* Data structures to keep state of buffer pool */
     private Frame[] bufferPool;
-    private HashMap<PageId, Integer> bookKeeping;
+    private LinkedHashMap<PageId, Integer> bookKeeping;
     private Stack<Integer> freeIndexes = new Stack<>();
 
     /* Class variables/objects */
     private int maxNoOfFrames;
-    private DiskMgr diskMgr = new DiskMgr();
+    private int current = 0;
+    private int pageId = 3;
 
     /**
      * Constructs a buffer manager by initializing member data.
@@ -42,7 +44,7 @@ public class BufMgr implements GlobalConst {
      */
     public BufMgr(int numOfFrames) {
         bufferPool = new Frame[numOfFrames];
-        bookKeeping = new HashMap<>();
+        bookKeeping = new LinkedHashMap<>();
         maxNoOfFrames = numOfFrames;
 
         /* populate the stack with available index*/
@@ -116,7 +118,7 @@ public class BufMgr implements GlobalConst {
     }// public void pinPage(PageId pageno, Page page, int contents)
 
     /**
-     * Uses a replacement policy to pick a frame that can be replaced in the buffer pool
+     * PinPage helper function. There's a call to replacementPolicy.
      * TODO: refactor this method
      */
     private Frame pickAndAssignPageToFrame(PageId pageno, Page mempage, int contents) {
@@ -125,32 +127,44 @@ public class BufMgr implements GlobalConst {
         if (!freeIndexes.isEmpty()) {
             switch (contents){
                 case PIN_DISKIO:
-                    diskMgr.read_page(pageno, mempage); // additional IO
+                    Minibase.DiskManager.read_page(pageno, mempage); // additional IO
                     frame.setPage(mempage);
+                    frame.incrementPinCount();
+                    frame.setReferenced();
                     break;
-                case PIN_MEMCPY: frame.setPage(mempage);
+                case PIN_MEMCPY:
+                    frame.setPage(mempage);
+                    frame.incrementPinCount();
+                    frame.setReferenced();
                     break;
-                default: frame = null;  // this branch should never be taken
+                default:
+                    frame = null;  // this branch should never be taken
                     break;
             }
         } else {
             /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
-            frame = replacementPolicy();
+            frame = replacementPolicy(current);
             if (frame != null) {
                 /* We also need to ensure it's written to disk if modified */
-                if (frame.getDirtyBit()){
-                    flushPage(frame.getPageId());
-                }
+                flushPage(frame);
+                frame.unsetPage();
+                freeIndexes.push(bookKeeping.get(frame.getPageId()));
                 switch (contents) {
                     case PIN_DISKIO:
-                        diskMgr.read_page(pageno, mempage);
+                        Minibase.DiskManager.read_page(pageno, mempage);
+                        frame.setPageId(pageno);
                         frame.setPage(mempage);
+                        frame.incrementPinCount();
+                        frame.setReferenced();
                         break;
                     case PIN_MEMCPY:
+                        frame.setPageId(pageno);
                         frame.setPage(mempage);
+                        frame.incrementPinCount();
+                        frame.setReferenced();
                         break;
                     default:
-                        frame = null;
+                        frame = null;   // this branch should never be taken
                         break;
                 }
             }
@@ -158,11 +172,28 @@ public class BufMgr implements GlobalConst {
         return frame;
     } // private Frame pickVulnerableFrame(PageId pageno, Page mempage, int contents)
 
-    /* clock replacement policy */
-    private Frame replacementPolicy(){
-        throw new UnsupportedOperationException("not implemeted");
-
-    } // private replacementPolicy()
+    /**
+     * Clock Replacement policy
+     * Returns null if all pages are pinned.
+     * Another assumption is, this method is only called when all frames in the BP have been assigned.
+     * Otherwise we could have just picked any one of the free frames to use.
+     * */
+    @Nullable
+    private Frame replacementPolicy(int count){
+        if (count == 3){
+            return null;
+        }
+        Frame currFrame = bufferPool[current];
+        if (currFrame.getPinCount() == 0){
+            if (currFrame.getReferenced() == 1){
+                currFrame.unsetReferenced();
+                current = (current + 1) % maxNoOfFrames;
+            } else {
+                return currFrame;
+            }
+        }
+        return replacementPolicy(count + 1);
+    } // private replacementPolicy(int current)
 
     /**
      * Unpins a disk page from the buffer pool, decreasing its pin count.
@@ -183,7 +214,8 @@ public class BufMgr implements GlobalConst {
         frame.decrementPinCount();
         /* Should we check for the pincount value before writing ? */
         if (dirty){
-            flushPage(pageno);
+            frame.setDirty();
+            flushPage(frame);
         }
     } // public void unpinPage(PageId pageno, boolean dirty)
 
@@ -199,11 +231,13 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalStateException if all pages are pinned (i.e. pool exceeded)
      */
     public PageId newPage(Page firstpg, int run_size) {
-        Frame frame = replacementPolicy();
-        if (frame == null){
-            throw new IllegalStateException("Pool exceeded");
+        if (freeIndexes.isEmpty()) {
+            Frame frame = replacementPolicy(current);
+            if (frame == null) {
+                throw new IllegalStateException("Pool exceeded");
+            }
         }
-        PageId pageId = diskMgr.allocate_page(run_size);
+        PageId pageId = Minibase.DiskManager.allocate_page(run_size);
         try {
             pinPage(pageId, firstpg, PIN_MEMCPY);
         } catch (Exception ex){
@@ -231,7 +265,7 @@ public class BufMgr implements GlobalConst {
             freeIndexes.push(frameIndex);
             bookKeeping.remove(pageno);
         }
-        diskMgr.deallocate_page(pageno);
+        Minibase.DiskManager.deallocate_page(pageno);
     } // public void freePage(PageId firstid)
 
     /**
@@ -241,8 +275,8 @@ public class BufMgr implements GlobalConst {
      *
      */
     public void flushAllFrames() {
-        for (PageId key: bookKeeping.keySet()){
-            flushPage(key);
+        for (int frameIndex: bookKeeping.values()){
+            flushPage(bufferPool[frameIndex]);
         }
     } // public void flushAllFrames()
 
@@ -251,14 +285,14 @@ public class BufMgr implements GlobalConst {
      *
      * @throws IllegalArgumentException if the page is not in the buffer pool
      */
-    public void flushPage(PageId pageno) {
-        if (!bookKeeping.containsKey(pageno)) {
+    private void flushPage(Frame frame) {
+        if (frame.getPage() == null) {
             throw new IllegalArgumentException("Attempt to flush a page not in the bufferpool");
         }
 
-        Frame frame = bufferPool[bookKeeping.get(pageno)];
         if (frame.getDirtyBit()){
-            diskMgr.write_page(pageno, frame.getPage());
+            Minibase.DiskManager.write_page(frame.getPageId(), frame.getPage());
+            frame.setClean();
         }
     }
 

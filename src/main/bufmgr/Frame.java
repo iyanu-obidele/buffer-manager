@@ -9,32 +9,40 @@ public class Frame {
     private int pinCount;
     private Page page;
     private PageId pageId;
+    private int referenced;
 
     /** new frame constructor */
     public Frame(PageId pageId){
-        this(false, 0, null, pageId);
+        this(false, 0, 0, null, pageId);
     }
 
     /** constructor for the frame */
-    public Frame(boolean dirtyBit, int count, Page somePage, PageId id){
+    public Frame(boolean dirtyBit, int count, int ref, Page somePage, PageId id){
         dirty = dirtyBit;
         pinCount = count;
+        referenced = ref;
         page = somePage;
         pageId = id;
     }
 
-    /** returns the current pinCount of the page */
-    public synchronized int getPinCount(){
-        return this.pinCount;
-    }
-
-    /** returns the current dirty bit state of the page in the frame*/
-    public synchronized boolean getDirtyBit(){
-        return this.dirty;
-    }
-
     public PageId getPageId(){
         return this.pageId;
+    }
+
+    public void setPageId(PageId id){
+        this.pageId = id;
+    }
+
+    public void setReferenced(){
+        this.referenced = 1;
+    }
+
+    public void unsetReferenced(){
+        this.referenced = 0;
+    }
+
+    public int getReferenced(){
+        return this.referenced;
     }
 
     /** returns the current page stored in this frame*/
@@ -51,6 +59,11 @@ public class Frame {
         this.page = newPage;
     }
 
+    /** returns the current pinCount of the page */
+    public synchronized int getPinCount(){
+        return this.pinCount;
+    }
+
     /** increase number of usage for this page*/
     public synchronized void incrementPinCount(){
         this.pinCount++;
@@ -63,15 +76,23 @@ public class Frame {
         }
     }
 
+    /** returns the current dirty bit state of the page in the frame*/
+    public synchronized boolean getDirtyBit(){
+        return this.dirty;
+    }
+
     /** set the page in the frame to dirty */
     public synchronized void setDirty(){
         this.dirty = true;
     }
 
+    public void setClean() { this.dirty = false; }
+
     /** once a page is detached from the frame, it's safe to wipe it all clean */
     public synchronized void unsetPage(){
        this.dirty = false;
        this.pinCount = 0;
+       this.referenced = 0;
        this.page = null;
        this.pageId = null;
     }
