@@ -4,7 +4,6 @@ import main.global.GlobalConst;
 import main.global.Minibase;
 import main.global.Page;
 import main.global.PageId;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 
@@ -83,7 +82,6 @@ public class BufMgr implements GlobalConst {
         /* case 0: PIN_NOOP -
         copy nothing into the frame means what exactly ?
         Return immediately from pinPage or allocate the frame but leave its content empty ?*/
-
         /* case 1: If page is already in buffer pool increase pinCount */
         if (bookKeeping.containsKey(pageno.pid)){
             int frameIndex = bookKeeping.get(pageno.pid);
@@ -123,16 +121,14 @@ public class BufMgr implements GlobalConst {
             switch (contents){
                 case PIN_DISKIO:
                     Minibase.DiskManager.read_page(pageno, mempage); // additional IO
-                    frame.setPage(mempage);
-                    frame.incrementPinCount();
-                    frame.setReferenced();
-                    break;
-                case PIN_MEMCPY:
+                    frame.setPageId(pageno);
                     frame.setPage(mempage);
                     frame.incrementPinCount();
                     frame.setReferenced();
                     break;
                 case PIN_NOOP:
+                case PIN_MEMCPY:
+                    frame.setPageId(pageno);
                     frame.setPage(mempage);
                     frame.incrementPinCount();
                     frame.setReferenced();
@@ -153,13 +149,9 @@ public class BufMgr implements GlobalConst {
                         frame.incrementPinCount();
                         frame.setReferenced();
                         break;
+                    case PIN_NOOP:
                     case PIN_MEMCPY:
                         frame.setPageId(pageno);
-                        frame.setPage(mempage);
-                        frame.incrementPinCount();
-                        frame.setReferenced();
-                        break;
-                    case PIN_NOOP:
                         frame.setPage(mempage);
                         frame.incrementPinCount();
                         frame.setReferenced();
@@ -179,7 +171,6 @@ public class BufMgr implements GlobalConst {
      * Another assumption is, this method is only called when all frames in the BP have been assigned.
      * Otherwise we could have just picked any one of the free frames to use.
      * */
-    @Nullable
     private Frame replacementPolicy(){
         int rotation = 0;
         Frame currFrame = null;
@@ -194,6 +185,7 @@ public class BufMgr implements GlobalConst {
                     currFrame = bufferPool[current];
                     currFrame.unsetPage();
                     freeIndexes.push(current);
+                    bookKeeping.remove(currFrame.getPageId().pid);
                 }
             }
         }
@@ -214,6 +206,11 @@ public class BufMgr implements GlobalConst {
         }
         Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
         frame.decrementPinCount();
+        if (frame.getPinCount() == 0)
+            frame.unsetPage();
+            freeIndexes.push(Arrays.asList(bufferPool).indexOf(frame));
+            bookKeeping.remove(pageno.pid);
+            /*ArrayUtils.re*/
         /* Should we check for the pincount value before writing ? */
         if (dirty){
             frame.setDirty();
@@ -266,6 +263,7 @@ public class BufMgr implements GlobalConst {
             int frameIndex = bookKeeping.get(pageno.pid);
             freeIndexes.push(frameIndex);
             bookKeeping.remove(pageno.pid);
+
         }
         Minibase.DiskManager.deallocate_page(pageno);
     } // public void freePage(PageId firstid)
