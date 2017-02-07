@@ -207,10 +207,11 @@ public class BufMgr implements GlobalConst {
         }
         Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
         frame.decrementPinCount();
-        if (frame.getPinCount() == 0)
+        if (frame.getPinCount() == 0) {
             frame.unsetPage();
             freeIndexes.push(Arrays.asList(bufferPool).indexOf(frame));
             bookKeeping.remove(pageno.pid);
+        }
             /*ArrayUtils.re*/
         /* Should we check for the pincount value before writing ? */
         if (dirty){
