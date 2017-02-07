@@ -178,9 +178,6 @@ public class BufMgr implements GlobalConst {
             if (bufferPool[current].getPinCount() == 0) {
                 if (bufferPool[current].getReferenced() == 1) {
                     bufferPool[current].unsetReferenced();
-                    current = (current + 1) % maxNoOfFrames;
-                    if (current == 0)
-                        rotation++;
                 } else {
                     currFrame = bufferPool[current];
                     currFrame.unsetPage();
@@ -188,6 +185,9 @@ public class BufMgr implements GlobalConst {
                     bookKeeping.remove(currFrame.getPageId().pid);
                 }
             }
+            current = (current + 1) % maxNoOfFrames;
+            if (current == 0)
+                rotation++;
         }
         return currFrame;
     } // private replacementPolicy(int current)
@@ -201,8 +201,9 @@ public class BufMgr implements GlobalConst {
      *  or not pinned
      */
     public void unpinPage(PageId pageno, boolean dirty) {
-        if (!bookKeeping.containsKey(pageno.pid)) {
-            throw new IllegalArgumentException("Attempt to unpin a page not in the buffer pool");
+        //if Arrays.asList(bufferPool).contains(bookKeeping.get(pageno.pid))
+        if (!bookKeeping.containsKey(pageno.pid)){
+            throw new IllegalArgumentException("Page is not in the bufferpool");
         }
         Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
         frame.decrementPinCount();
