@@ -86,7 +86,7 @@ public class Frame {
     public void setClean() { this.dirty = false; }
 
     /** once a page is detached from the frame, it's safe to wipe it all clean */
-    public synchronized void unsetPage(){
+    public synchronized void freeFrame(){
        this.dirty = false;
        this.pinCount = 0;
        this.referenced = 0;
