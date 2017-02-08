@@ -275,8 +275,8 @@ public class BufMgr implements GlobalConst {
             int frameIndex = bookKeeping.get(pageno.pid);
             freeIndexes.push(frameIndex);
             bookKeeping.remove(pageno.pid);
-            Minibase.DiskManager.deallocate_page(pageno);
         }
+        Minibase.DiskManager.deallocate_page(pageno);
     } // public void freePage(PageId firstid)
 
     /**
