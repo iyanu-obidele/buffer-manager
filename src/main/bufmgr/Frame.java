@@ -89,6 +89,7 @@ public class Frame {
     public synchronized void freeFrame(){
        this.dirty = false;
        this.pinCount = 0;
+       this.page = null;
        this.referenced = 0;
     }
 }
