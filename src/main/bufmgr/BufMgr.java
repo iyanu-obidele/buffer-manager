@@ -80,27 +80,24 @@ public class BufMgr implements GlobalConst {
      */
     public void pinPage(PageId pageno, Page mempage, int contents) {
         if (bookKeeping.containsKey(pageno.pid)){
-            pinPageAlreadyInBP(pageno, mempage, contents);
+            int frameIndex = bookKeeping.get(pageno.pid);
+            Frame frame = bufferPool[frameIndex];
+            if (contents == PIN_MEMCPY && frame.getPinCount() > 0) {
+                throw new IllegalArgumentException("Page is already pinned and a copy was requested");
+            }
+            if (contents == PIN_DISKIO){
+                Minibase.DiskManager.read_page(pageno, mempage); // additional IO
+                frame.setPage(mempage);
+                frame.setReferenced();
+            }
+            frame.incrementPinCount();
+            mempage.setData(frame.getPage().getData());
         } else {
             pinPageNotInPool(pageno, mempage, contents);
         }
 
     }// public void pinPage(PageId pageno, Page page, int contents)
 
-    /* Helper method for pin Page, in the case where the page is in the bufferpool*/
-    private void pinPageAlreadyInBP(PageId pageno, Page mempage, int contents){
-        int frameIndex = bookKeeping.get(pageno.pid);
-        Frame frame = bufferPool[frameIndex];
-        if (contents == PIN_MEMCPY && frame.getPinCount() > 0) {
-            throw new IllegalArgumentException("Page is already pinned and a copy was requested");
-        }
-        if (contents == PIN_DISKIO){
-            Minibase.DiskManager.read_page(pageno, mempage); // additional IO
-            frame.setPage(mempage);
-            frame.setReferenced();
-        }
-        frame.incrementPinCount();
-    }
 
     /**
      *  Helper method for pin Page, in the case where the page is not available in BP
@@ -130,11 +127,13 @@ public class BufMgr implements GlobalConst {
         if (!freeIndexes.isEmpty()) {
             frame = new Frame(pageno);
             commonTasksFromPinPage(frame, pageno, mempage, contents);
+            mempage.setPage(frame.getPage());
         } else {
             /* case b: Bufferpool is filled, we need to pick a frame to replace if there's one */
             frame = replacementPolicy();
             if (frame != null) {
                 commonTasksFromPinPage(frame, pageno, mempage, contents);
+                mempage.setPage(frame.getPage());
             }
         }
         return frame;
@@ -298,6 +297,8 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalArgumentException if the page is not in the buffer pool
      */
     private void flushPage(Frame frame) {
+        if (frame.getPage() == null && !Arrays.asList(bufferPool).contains(frame))
+            throw new IllegalArgumentException("Page is not in the buffer pool");
         if (frame.getDirtyBit()){
             Minibase.DiskManager.write_page(frame.getPageId(), frame.getPage());
             frame.setClean();
