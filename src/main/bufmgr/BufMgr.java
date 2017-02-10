@@ -4,10 +4,8 @@ import main.global.GlobalConst;
 import main.global.Minibase;
 import main.global.Page;
 import main.global.PageId;
-import org.jetbrains.annotations.Nullable;
 
-import java.util.LinkedHashMap;
-import java.util.Stack;
+import java.util.*;
 
 /**
  * <h3>Minibase Buffer Manager</h3>
@@ -28,13 +26,12 @@ public class BufMgr implements GlobalConst {
 
     /* Data structures to keep state of buffer pool */
     private Frame[] bufferPool;
-    private LinkedHashMap<PageId, Integer> bookKeeping;
+    private HashMap<Integer, Integer> bookKeeping;
     private Stack<Integer> freeIndexes = new Stack<>();
 
     /* Class variables/objects */
     private int maxNoOfFrames;
     private int current = 0;
-    private int pageId = 3;
 
     /**
      * Constructs a buffer manager by initializing member data.
@@ -44,7 +41,7 @@ public class BufMgr implements GlobalConst {
      */
     public BufMgr(int numOfFrames) {
         bufferPool = new Frame[numOfFrames];
-        bookKeeping = new LinkedHashMap<>();
+        bookKeeping = new HashMap<>();
         maxNoOfFrames = numOfFrames;
 
         /* populate the stack with available index*/
@@ -82,118 +79,137 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalStateException if all pages are pinned (i.e. pool is full)
      */
     public void pinPage(PageId pageno, Page mempage, int contents) {
-        /* case 0: PIN_NOOP -
-        copy nothing into the frame means what exactly ?
-        Return immediately from pinPage or allocate the frame but leave its content empty ?*/
-        if (contents == PIN_NOOP){
-            return;
-        }
-
-        /* case 1: If page is already in buffer pool increase pinCount */
-        if (bookKeeping.containsKey(pageno)){
-            int frameIndex = bookKeeping.get(pageno);
+        if (bookKeeping.containsKey(pageno.pid)){
+            int frameIndex = bookKeeping.get(pageno.pid);
             Frame frame = bufferPool[frameIndex];
             if (contents == PIN_MEMCPY && frame.getPinCount() > 0) {
                 throw new IllegalArgumentException("Page is already pinned and a copy was requested");
             }
-            frame.incrementPinCount();
-        } else {
-            /* Pick frame to use using a replacement policy */
-            Frame frame = pickAndAssignPageToFrame(pageno, mempage, contents);
-
-            /* When all pages pinned */
-            if (frame == null){
-                throw new IllegalStateException("Bufferpool is full and we couldn't find any frames to replace");
+            if (contents == PIN_DISKIO){
+                Minibase.DiskManager.read_page(pageno, mempage); // additional IO
+                frame.setPage(mempage);
+                frame.setReferenced();
             }
-
-            /* Get available index. Note, this wont throw an exception, as long as
-            * method "pickAndAssignPageToFrame" finds a frame to replace */
-            int frameIndex = freeIndexes.pop();
-
-            /* Update books */
-            bufferPool[frameIndex] = frame;
-            bookKeeping.put(pageno, frameIndex);
+            frame.incrementPinCount();
+            mempage.setData(frame.getPage().getData());
+        } else {
+            pinPageNotInPool(pageno, mempage, contents);
         }
 
     }// public void pinPage(PageId pageno, Page page, int contents)
 
+
     /**
-     * PinPage helper function. There's a call to replacementPolicy.
-     * TODO: refactor this method
+     *  Helper method for pin Page, in the case where the page is not available in BP
+     * */
+    private void pinPageNotInPool(PageId pageno, Page mempage, int contents){
+        /* Pick frame to use using a replacement policy */
+        Frame frame = pinPageNotInPoolUtil(pageno, mempage, contents);
+        /* When all pages pinned */
+        if (frame == null){
+            throw new IllegalStateException("Bufferpool is full and we couldn't find any frames to replace");
+        }
+        // Get available index. Note, this will never throw an exception, as long as
+        // method "pinPageNotInPoolUtil" finds a frame to replace i.e. frame != null
+        int frameIndex = freeIndexes.pop();
+
+        /* Update books */
+        bufferPool[frameIndex] = frame;
+        bookKeeping.put(pageno.pid, frameIndex);
+    }
+
+    /**
+     * PinPage helper function.
      */
-    private Frame pickAndAssignPageToFrame(PageId pageno, Page mempage, int contents) {
-        Frame frame = new Frame(pageno);
-        /* case 2a: If page is not in bufferpool and bufferpool has free frames */
+    private Frame pinPageNotInPoolUtil(PageId pageno, Page mempage, int contents) {
+        Frame frame;
+        /* case a: If page is not in bufferpool and bufferpool has free frames */
         if (!freeIndexes.isEmpty()) {
-            switch (contents){
-                case PIN_DISKIO:
-                    Minibase.DiskManager.read_page(pageno, mempage); // additional IO
-                    frame.setPage(mempage);
-                    frame.incrementPinCount();
-                    frame.setReferenced();
-                    break;
-                case PIN_MEMCPY:
-                    frame.setPage(mempage);
-                    frame.incrementPinCount();
-                    frame.setReferenced();
-                    break;
-                default:
-                    frame = null;  // this branch should never be taken
-                    break;
-            }
+            frame = new Frame(pageno);
+            commonTasksFromPinPage(frame, pageno, mempage, contents);
+            mempage.setPage(frame.getPage());
         } else {
-            /* case 2b: Bufferpool is filled, we need to pick a frame to replace if there's one */
-            frame = replacementPolicy(current);
+            /* case b: Bufferpool is filled, we need to pick a frame to replace if there's one */
+            frame = replacementPolicy();
             if (frame != null) {
-                /* We also need to ensure it's written to disk if modified */
-                flushPage(frame);
-                frame.unsetPage();
-                freeIndexes.push(bookKeeping.get(frame.getPageId()));
-                switch (contents) {
-                    case PIN_DISKIO:
-                        Minibase.DiskManager.read_page(pageno, mempage);
-                        frame.setPageId(pageno);
-                        frame.setPage(mempage);
-                        frame.incrementPinCount();
-                        frame.setReferenced();
-                        break;
-                    case PIN_MEMCPY:
-                        frame.setPageId(pageno);
-                        frame.setPage(mempage);
-                        frame.incrementPinCount();
-                        frame.setReferenced();
-                        break;
-                    default:
-                        frame = null;   // this branch should never be taken
-                        break;
-                }
+                commonTasksFromPinPage(frame, pageno, mempage, contents);
+                mempage.setPage(frame.getPage());
             }
         }
         return frame;
     } // private Frame pickVulnerableFrame(PageId pageno, Page mempage, int contents)
 
     /**
+     * Common tasks in method: pinPageNotInPoolUtil
+     * */
+    private void commonTasksFromPinPage(Frame frame, PageId pageno, Page mempage, int contents){
+        switch (contents) {
+            case PIN_DISKIO:
+                Minibase.DiskManager.read_page(pageno, mempage);
+                frame.setPageId(pageno);
+                frame.setPage(mempage);
+                frame.incrementPinCount();
+                frame.setReferenced();
+                break;
+            case PIN_NOOP:
+            case PIN_MEMCPY:
+                frame.setPageId(pageno);
+                frame.setPage(mempage);
+                frame.incrementPinCount();
+                frame.setReferenced();
+                break;
+            default:
+                break;
+        }
+    } // private void commonTasksFromPinPage(Frame frame, PageId pageno, Page mempage, int contents)
+
+    /**
      * Clock Replacement policy
      * Returns null if all pages are pinned.
      * Another assumption is, this method is only called when all frames in the BP have been assigned.
      * Otherwise we could have just picked any one of the free frames to use.
+     * Notes: Here i'm simulating a circular buffer by going through the bufferpool thrice
      * */
-    @Nullable
-    private Frame replacementPolicy(int count){
-        if (count == 3){
-            return null;
-        }
-        Frame currFrame = bufferPool[current];
-        if (currFrame.getPinCount() == 0){
-            if (currFrame.getReferenced() == 1){
-                currFrame.unsetReferenced();
+    private Frame replacementPolicy(){
+        Frame currFrame = null;
+        if (!isPoolExceeded()) {
+            int rotation = 0;
+            while (currFrame == null && rotation < 3) {
+                if (bufferPool[current].getPinCount() == 0) {
+                    if (bufferPool[current].getReferenced() == 1) {
+                        bufferPool[current].unsetReferenced();
+                    } else {
+                        currFrame = bufferPool[current];
+                        currFrame.freeFrame();
+                        freeIndexes.push(current);
+                        bookKeeping.remove(currFrame.getPageId().pid);
+                    }
+                }
                 current = (current + 1) % maxNoOfFrames;
-            } else {
-                return currFrame;
+                if (current == 0)
+                    rotation++;
             }
         }
-        return replacementPolicy(count + 1);
+        return currFrame;
     } // private replacementPolicy(int current)
+
+    /**
+     * Check if all pages in the BP have pinCount greater than 0
+     * */
+    private Boolean isPoolExceeded(){
+        Boolean exceeded = true;
+        if (freeIndexes.isEmpty()) {
+            for (int i = 0; i < getNumFrames(); i++) {
+                if (bufferPool[i].getPinCount() == 0) {
+                    exceeded = false;
+                    break;
+                }
+            }
+        } else {
+            exceeded = false;
+        }
+        return exceeded;
+    }
 
     /**
      * Unpins a disk page from the buffer pool, decreasing its pin count.
@@ -204,14 +220,16 @@ public class BufMgr implements GlobalConst {
      *  or not pinned
      */
     public void unpinPage(PageId pageno, boolean dirty) {
-        if (!bookKeeping.containsKey(pageno)) {
-            throw new IllegalArgumentException("Attempt to unpin a page not in the buffer pool");
+        if (!bookKeeping.containsKey(pageno.pid)){
+            throw new IllegalArgumentException("Page is not in the bufferpool");
         }
-        Frame frame = bufferPool[bookKeeping.get(pageno)];
-        if (frame.getPinCount() == 0){
-            throw new IllegalArgumentException("Cannot unpin a page that isn't pinned");
-        }
+        Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
         frame.decrementPinCount();
+        if (frame.getPinCount() == 0) {
+            frame.freeFrame();
+            freeIndexes.push(Arrays.asList(bufferPool).indexOf(frame));
+            bookKeeping.remove(pageno.pid);
+        }
         /* Should we check for the pincount value before writing ? */
         if (dirty){
             frame.setDirty();
@@ -231,18 +249,11 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalStateException if all pages are pinned (i.e. pool exceeded)
      */
     public PageId newPage(Page firstpg, int run_size) {
-        if (freeIndexes.isEmpty()) {
-            Frame frame = replacementPolicy(current);
-            if (frame == null) {
-                throw new IllegalStateException("Pool exceeded");
-            }
+        if (isPoolExceeded()) {
+           throw new IllegalStateException("Pool exceeded");
         }
         PageId pageId = Minibase.DiskManager.allocate_page(run_size);
-        try {
-            pinPage(pageId, firstpg, PIN_MEMCPY);
-        } catch (Exception ex){
-            throw ex;
-        }
+        pinPage(pageId, firstpg, PIN_MEMCPY);   // this could throw an exception, but that's the right behavior
         return pageId;
     } // public PageId newPage(Page firstpg, int run_size)
 
@@ -253,17 +264,16 @@ public class BufMgr implements GlobalConst {
      * @throws IllegalArgumentException if the page is pinned
      */
     public void freePage(PageId pageno) {
-        if (bookKeeping.containsKey(pageno)){
-            Frame frame = bufferPool[bookKeeping.get(pageno)];
+        if (bookKeeping.containsKey(pageno.pid)){
+            Frame frame = bufferPool[bookKeeping.get(pageno.pid)];
             if (frame.getPinCount() > 0){
                 throw new IllegalArgumentException("Attempt to deallocate a page in use");
             }
-            frame.unsetPage();
-
+            frame.freeFrame();
             /* Update books */
-            int frameIndex = bookKeeping.get(pageno);
+            int frameIndex = bookKeeping.get(pageno.pid);
             freeIndexes.push(frameIndex);
-            bookKeeping.remove(pageno);
+            bookKeeping.remove(pageno.pid);
         }
         Minibase.DiskManager.deallocate_page(pageno);
     } // public void freePage(PageId firstid)
@@ -282,32 +292,31 @@ public class BufMgr implements GlobalConst {
 
     /**
      * Write a page in the buffer pool to disk, if dirty.
+     * No need to check if page is in pool, there's protection from the callers.
      *
      * @throws IllegalArgumentException if the page is not in the buffer pool
      */
     private void flushPage(Frame frame) {
-        if (frame.getPage() == null) {
-            throw new IllegalArgumentException("Attempt to flush a page not in the bufferpool");
-        }
-
+        if (frame.getPage() == null && !Arrays.asList(bufferPool).contains(frame))
+            throw new IllegalArgumentException("Page is not in the buffer pool");
         if (frame.getDirtyBit()){
             Minibase.DiskManager.write_page(frame.getPageId(), frame.getPage());
             frame.setClean();
         }
-    }
+    } // private void flushPage(Frame frame)
 
     /**
      * Gets the total number of buffer frames.
      */
     public int getNumFrames() {
         return this.maxNoOfFrames;
-    }
+    } // public int getNumFrames()
 
     /**
      * Gets the total number of unpinned buffer frames.
      */
     public int getNumUnpinned() {
         return this.freeIndexes.size();
-    }
+    } // public int getNumUnpinned()
 
 } // public class BufMgr implements GlobalConst
