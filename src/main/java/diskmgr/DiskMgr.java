@@ -1,9 +1,9 @@
-package main.diskmgr;
+package diskmgr;
 
-import main.global.GlobalConst;
-import main.global.Minibase;
-import main.global.Page;
-import main.global.PageId;
+import global.GlobalConst;
+import global.Minibase;
+import global.Page;
+import global.PageId;
 
 import java.io.File;
 import java.io.IOException;
@@ -26,7 +26,7 @@ import java.io.RandomAccessFile;
 public class DiskMgr implements GlobalConst {
 
   /** Number of actual bits per page. */
-  protected static final int BITS_PER_PAGE = GlobalConst.PAGE_SIZE * 8;
+  protected static final int BITS_PER_PAGE = PAGE_SIZE * 8;
 
   // --------------------------------------------------------------------------
 
@@ -66,18 +66,18 @@ public class DiskMgr implements GlobalConst {
     // create the database file, num_pages pages long
     try {
       fp = new RandomAccessFile(fname, "rw");
-      fp.seek((long) (num_db_pages * GlobalConst.PAGE_SIZE - 1));
+      fp.seek((long) (num_db_pages * PAGE_SIZE - 1));
       fp.writeByte(0);
     } catch (IOException exc) {
       Minibase.haltSystem(exc);
     }
 
     // create and initialize the first DB page
-    PageId pageId = new PageId(GlobalConst.FIRST_PAGEID);
+    PageId pageId = new PageId(FIRST_PAGEID);
     DBFirstPage firstpg = new DBFirstPage();
-    Minibase.BufferManager.pinPage(pageId, firstpg, GlobalConst.PIN_MEMCPY);
+    Minibase.BufferManager.pinPage(pageId, firstpg, PIN_MEMCPY);
     firstpg.setNumDBPages(num_db_pages);
-    Minibase.BufferManager.unpinPage(pageId, GlobalConst.UNPIN_DIRTY);
+    Minibase.BufferManager.unpinPage(pageId, UNPIN_DIRTY);
 
     // calculate how many pages are needed for the space map; reserve
     // page 0 plus room for the space map
@@ -103,14 +103,14 @@ public class DiskMgr implements GlobalConst {
     }
 
     // read the first page
-    PageId pageId = new PageId(GlobalConst.FIRST_PAGEID);
+    PageId pageId = new PageId(FIRST_PAGEID);
     Page apage = new Page();
-    Minibase.BufferManager.pinPage(pageId, apage, GlobalConst.PIN_DISKIO);
+    Minibase.BufferManager.pinPage(pageId, apage, PIN_DISKIO);
 
     // get the total number of pages
     DBFirstPage firstpg = new DBFirstPage(apage);
     num_db_pages = firstpg.getNumDBPages();
-    Minibase.BufferManager.unpinPage(pageId, GlobalConst.UNPIN_CLEAN);
+    Minibase.BufferManager.unpinPage(pageId, UNPIN_CLEAN);
 
   } // public void openDB(String fname)
 
@@ -154,7 +154,7 @@ public class DiskMgr implements GlobalConst {
 
     // seek to the correct page on disk and read it
     try {
-      fp.seek((long) (pageno.pid * GlobalConst.PAGE_SIZE));
+      fp.seek((long) (pageno.pid * PAGE_SIZE));
       fp.read(mempage.getData());
       read_cnt++;
     } catch (IOException exc) {
@@ -179,7 +179,7 @@ public class DiskMgr implements GlobalConst {
 
     // seek to the correct page on disk and write it
     try {
-      fp.seek((long) (pageno.pid * GlobalConst.PAGE_SIZE));
+      fp.seek((long) (pageno.pid * PAGE_SIZE));
       fp.write(mempage.getData());
       write_cnt++;
     } catch (IOException exc) {
@@ -231,7 +231,7 @@ public class DiskMgr implements GlobalConst {
 
       // pin the current space-map page
       pgid.pid = i + 1;
-      Minibase.BufferManager.pinPage(pgid, apage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(pgid, apage, PIN_DISKIO);
 
       // get the number of bits on current page
       int num_bits_this_page = num_db_pages - i * BITS_PER_PAGE;
@@ -272,7 +272,7 @@ public class DiskMgr implements GlobalConst {
       } // inner loop
 
       // unpin the current space-map page
-      Minibase.BufferManager.unpinPage(pgid, GlobalConst.UNPIN_CLEAN);
+      Minibase.BufferManager.unpinPage(pgid, UNPIN_CLEAN);
 
     } // outer loop
 
@@ -352,7 +352,7 @@ public class DiskMgr implements GlobalConst {
 
       // pin the space-map page
       pgid.pid = 1 + i;
-      Minibase.BufferManager.pinPage(pgid, apage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(pgid, apage, PIN_DISKIO);
 
       // how many bits should we examine on this page?
       int num_bits_this_page = num_db_pages - i * BITS_PER_PAGE;
@@ -372,7 +372,7 @@ public class DiskMgr implements GlobalConst {
       }
 
       // unpin the space-map page
-      Minibase.BufferManager.unpinPage(pgid, GlobalConst.UNPIN_CLEAN);
+      Minibase.BufferManager.unpinPage(pgid, UNPIN_CLEAN);
 
     } // end of forloop01
 
@@ -399,7 +399,7 @@ public class DiskMgr implements GlobalConst {
       // pin the space-map page
       pgid.pid = 1 + i; // space map starts at page1
       Page apage = new Page();
-      Minibase.BufferManager.pinPage(pgid, apage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(pgid, apage, PIN_DISKIO);
 
       // how many bits should we examine on this page?
       int num_bits_this_page = num_db_pages - i * BITS_PER_PAGE;
@@ -444,7 +444,7 @@ public class DiskMgr implements GlobalConst {
 
       } // end of forloop02
 
-      Minibase.BufferManager.unpinPage(pgid, GlobalConst.UNPIN_CLEAN);
+      Minibase.BufferManager.unpinPage(pgid, UNPIN_CLEAN);
 
     } // end of forloop01
 
@@ -469,7 +469,7 @@ public class DiskMgr implements GlobalConst {
 
       // pin the space-map page
       Page pg = new Page();
-      Minibase.BufferManager.pinPage(pgid, pg, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(pgid, pg, PIN_DISKIO);
       byte[] pgbuf = pg.getData();
 
       // locate the piece of the run that fits on this page
@@ -513,7 +513,7 @@ public class DiskMgr implements GlobalConst {
       } // end of forloop02
 
       // unpin the space-map page
-      Minibase.BufferManager.unpinPage(pgid, GlobalConst.UNPIN_DIRTY);
+      Minibase.BufferManager.unpinPage(pgid, UNPIN_DIRTY);
 
     } // end of forloop01
 
@@ -532,7 +532,7 @@ public class DiskMgr implements GlobalConst {
   public void add_file_entry(String fname, PageId start_pageno) {
 
     // validate the arguments
-    if (fname.length() > GlobalConst.NAME_MAXLEN) {
+    if (fname.length() > NAME_MAXLEN) {
       throw new IllegalArgumentException("Filename too long; add entry aborted");
     }
     if ((start_pageno.pid < 0) || (start_pageno.pid >= num_db_pages)) {
@@ -552,19 +552,19 @@ public class DiskMgr implements GlobalConst {
     DBHeaderPage hpage = new DBHeaderPage();
     PageId hpid = new PageId();
     PageId tmppid = new PageId();
-    PageId nexthpid = new PageId(GlobalConst.FIRST_PAGEID);
+    PageId nexthpid = new PageId(FIRST_PAGEID);
     do {
 
       // pin the next header page and get its next
       hpid.pid = nexthpid.pid;
-      Minibase.BufferManager.pinPage(hpid, hpage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(hpid, hpage, PIN_DISKIO);
       nexthpid = hpage.getNextPage();
 
       // search the header page for an empty entry
       int entry = 0;
       while (entry < hpage.getNumOfEntries()) {
         hpage.getFileEntry(tmppid, entry);
-        if (tmppid.pid == GlobalConst.INVALID_PAGEID) {
+        if (tmppid.pid == INVALID_PAGEID) {
           break;
         }
         entry++;
@@ -574,12 +574,12 @@ public class DiskMgr implements GlobalConst {
       if (entry < hpage.getNumOfEntries()) {
         free_slot = entry;
         found = true;
-      } else if (nexthpid.pid != GlobalConst.INVALID_PAGEID) {
+      } else if (nexthpid.pid != INVALID_PAGEID) {
         // unpin before continuing loop
-        Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_CLEAN);
+        Minibase.BufferManager.unpinPage(hpid, UNPIN_CLEAN);
       }
 
-    } while ((nexthpid.pid != GlobalConst.INVALID_PAGEID) && (!found));
+    } while ((nexthpid.pid != INVALID_PAGEID) && (!found));
 
     // if necessary (and possible), add a new header page to the library
     if (!found) {
@@ -589,11 +589,11 @@ public class DiskMgr implements GlobalConst {
 
       // set the next-page pointer on the previous library page
       hpage.setNextPage(nexthpid);
-      Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_DIRTY);
+      Minibase.BufferManager.unpinPage(hpid, UNPIN_DIRTY);
 
       // pin the newly-allocated directory page
       hpid.pid = nexthpid.pid;
-      Minibase.BufferManager.pinPage(hpid, hpage, GlobalConst.PIN_MEMCPY);
+      Minibase.BufferManager.pinPage(hpid, hpage, PIN_MEMCPY);
       hpage.initDefaults();
       free_slot = 0;
 
@@ -603,7 +603,7 @@ public class DiskMgr implements GlobalConst {
     // slot; "hpage" has the directory_page pointer; "free_slot" is the entry
     // number in the directory where we're going to put the new file entry.
     hpage.setFileEntry(fname, start_pageno, free_slot);
-    Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_DIRTY);
+    Minibase.BufferManager.unpinPage(hpid, UNPIN_DIRTY);
 
   } // public void add_file_entry(String fname, PageId start_pageno)
 
@@ -631,7 +631,7 @@ public class DiskMgr implements GlobalConst {
 
       // pin the next library page and get its next
       hpid.pid = nexthpid.pid;
-      Minibase.BufferManager.pinPage(hpid, hpage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(hpid, hpage, PIN_DISKIO);
       nexthpid = hpage.getNextPage();
 
       // search the library page for the entry
@@ -639,7 +639,7 @@ public class DiskMgr implements GlobalConst {
       String tmpname = null;
       while (entry < hpage.getNumOfEntries()) {
         tmpname = hpage.getFileEntry(tmppid, entry);
-        if ((tmppid.pid != GlobalConst.INVALID_PAGEID)
+        if ((tmppid.pid != INVALID_PAGEID)
             && (tmpname.compareToIgnoreCase(fname) == 0)) {
           break;
         }
@@ -652,15 +652,15 @@ public class DiskMgr implements GlobalConst {
         found = true;
       } else {
         // unpin before continuing loop
-        Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_CLEAN);
+        Minibase.BufferManager.unpinPage(hpid, UNPIN_CLEAN);
       }
 
-    } while ((nexthpid.pid != GlobalConst.INVALID_PAGEID) && (!found));
+    } while ((nexthpid.pid != INVALID_PAGEID) && (!found));
 
     // have to delete record at hpnum:slot
-    tmppid.pid = GlobalConst.INVALID_PAGEID;
+    tmppid.pid = INVALID_PAGEID;
     hpage.setFileEntry("\0", tmppid, slot);
-    Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_DIRTY);
+    Minibase.BufferManager.unpinPage(hpid, UNPIN_DIRTY);
 
   } // public void delete_file_entry(String fname)
 
@@ -683,7 +683,7 @@ public class DiskMgr implements GlobalConst {
 
       // pin the next library page and get its next
       hpid.pid = nexthpid.pid;
-      Minibase.BufferManager.pinPage(hpid, hpage, GlobalConst.PIN_DISKIO);
+      Minibase.BufferManager.pinPage(hpid, hpage, PIN_DISKIO);
       nexthpid = hpage.getNextPage();
 
       // search the library page for the entry
@@ -691,7 +691,7 @@ public class DiskMgr implements GlobalConst {
       String tmpname;
       while (entry < hpage.getNumOfEntries()) {
         tmpname = hpage.getFileEntry(tmppid, entry);
-        if ((tmppid.pid != GlobalConst.INVALID_PAGEID)
+        if ((tmppid.pid != INVALID_PAGEID)
             && (tmpname.compareToIgnoreCase(fname) == 0)) {
           break;
         }
@@ -705,9 +705,9 @@ public class DiskMgr implements GlobalConst {
       }
 
       // unpin the page before continuing or exiting loop
-      Minibase.BufferManager.unpinPage(hpid, GlobalConst.UNPIN_CLEAN);
+      Minibase.BufferManager.unpinPage(hpid, UNPIN_CLEAN);
 
-    } while ((nexthpid.pid != GlobalConst.INVALID_PAGEID) && (!found));
+    } while ((nexthpid.pid != INVALID_PAGEID) && (!found));
 
     // return null if not found
     if (!found) {

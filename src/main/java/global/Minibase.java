@@ -1,7 +1,7 @@
-package main.global;
+package global;
 
-import main.bufmgr.BufMgr;
-import main.diskmgr.DiskMgr;
+import bufmgr.BufMgr;
+import diskmgr.DiskMgr;
 
 /**
  * Definitions for the running Minibase system, including references to static
@@ -24,9 +24,9 @@ public class Minibase {
    * Constructs and starts an instance of Minibase, given the configuration.
    * 
    * @param dbname Name of the data file
-   * @param num_pgs Number of pages to allocate
-   * @param bufpoolsize Buffer pool size (in pages)
-   * @param exists If the database already exists on disk
+ * @param num_pgs Number of pages to allocate
+ * @param bufpoolsize Buffer pool size (in pages)
+ * @param exists If the database already exists on disk
    */
   public Minibase(String dbname, int num_pgs, int bufpoolsize,
       boolean exists) {
@@ -40,9 +40,9 @@ public class Minibase {
    * Initializes the current instance of Minibase with the given configuration.
    * 
    * @param dbname Name of the data file
-   * @param num_pgs Number of pages to allocate
-   * @param bufpoolsize Buffer pool size (in pages)
-   * @param exists If the database already exists on disk
+ * @param num_pgs Number of pages to allocate
+ * @param bufpoolsize Buffer pool size (in pages)
+ * @param exists If the database already exists on disk
    */
   public void init(String dbname, int num_pgs, int bufpoolsize,
       boolean exists) {

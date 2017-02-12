@@ -1,7 +1,7 @@
 package test;
 
-import main.global.GlobalConst;
-import main.global.Minibase;
+import global.GlobalConst;
+import global.Minibase;
 
 import java.io.File;
 import java.util.ArrayList;

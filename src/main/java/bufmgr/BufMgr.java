@@ -1,9 +1,9 @@
-package main.bufmgr;
+package bufmgr;
 
-import main.global.GlobalConst;
-import main.global.Minibase;
-import main.global.Page;
-import main.global.PageId;
+import global.GlobalConst;
+import global.Minibase;
+import global.Page;
+import global.PageId;
 
 import java.util.*;
 

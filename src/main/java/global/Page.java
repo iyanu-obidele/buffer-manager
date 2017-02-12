@@ -1,4 +1,4 @@
-package main.global;
+package global;
 
 /**
  * Image of a disk page in memory.
@@ -14,7 +14,7 @@ public class Page implements GlobalConst {
    * Default constructor; creates a blank page.
    */
   public Page() {
-    data = new byte[GlobalConst.PAGE_SIZE];
+    data = new byte[PAGE_SIZE];
   }
 
   /**
@@ -37,7 +37,7 @@ public class Page implements GlobalConst {
    * @throws IllegalArgumentException if the data array size is invalid
    */
   public void setData(byte[] data) {
-    if (data.length != GlobalConst.PAGE_SIZE) {
+    if (data.length != PAGE_SIZE) {
       Minibase.haltSystem(new IllegalArgumentException(
           "Invalid page buffer size"));
     }
@@ -55,7 +55,7 @@ public class Page implements GlobalConst {
    * Copies the contents of the given page's buffer into this page's buffer.
    */
   public void copyPage(Page page) {
-    System.arraycopy(page.data, 0, this.data, 0, GlobalConst.PAGE_SIZE);
+    System.arraycopy(page.data, 0, this.data, 0, PAGE_SIZE);
   }
 
   // --------------------------------------------------------------------------

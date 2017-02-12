@@ -1,7 +1,7 @@
-package main.bufmgr;
+package bufmgr;
 
-import main.global.Page;
-import main.global.PageId;
+import global.Page;
+import global.PageId;
 
 /* class representing the abstraction of a frame. */
 public class Frame {

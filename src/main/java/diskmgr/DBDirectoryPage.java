@@ -1,6 +1,6 @@
-package main.diskmgr;
+package diskmgr;
 
-import main.global.Page;
+import global.Page;
 
 /**
  * Directory pages store file entries and other high-level DB info.

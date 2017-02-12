@@ -1,4 +1,4 @@
-package main.global;
+package global;
 
 /**
  * Although a PageId is simply an integer, wrapping it provides convenient
@@ -15,7 +15,7 @@ public class PageId implements GlobalConst {
    * Default constructor.
    */
   public PageId() {
-    pid = GlobalConst.INVALID_PAGEID;
+    pid = INVALID_PAGEID;
   }
 
   /**

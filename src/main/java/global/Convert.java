@@ -1,4 +1,4 @@
-package main.global;
+package global;
 
 /**
  * Provides conversion routines for getting and setting data in byte arrays.

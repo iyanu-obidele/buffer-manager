@@ -1,7 +1,7 @@
-package main.diskmgr;
+package diskmgr;
 
-import main.global.Page;
-import main.global.PageId;
+import global.Page;
+import global.PageId;
 
 /**
  * Header pages contain the space map, the file library, and

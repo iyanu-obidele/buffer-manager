@@ -1,6 +1,6 @@
-package main.diskmgr;
+package diskmgr;
 
-import main.global.Page;
+import global.Page;
 
 /**
  * First page and starting point of the database file.
