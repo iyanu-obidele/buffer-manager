@@ -309,7 +309,7 @@ class BMTest extends TestDriver {
     int runSize = 2* Minibase.BufferManager.getNumFrames() - 10;
     int curPageIndex;  
     Page pg = new Page();
-    PageId pid = new PageId();
+    PageId pid;
     PageId[] pids = new PageId[runSize];
     boolean status3 = PASS;
 
