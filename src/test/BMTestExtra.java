@@ -1,9 +1,9 @@
 package test;
 
-import main.global.Convert;
-import main.global.Minibase;
-import main.global.Page;
-import main.global.PageId;
+import global.Convert;
+import global.Minibase;
+import global.Page;
+import global.PageId;
 
 /**
  * Test suite for the bufmgr layer.
